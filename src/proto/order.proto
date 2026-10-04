@@ -1,0 +1,10 @@
+syntax = "proto3";
+
+message OptionOrder {
+  string orderId = 1;
+  string underlying = 2;
+  double price = 3;
+  int64 quantity = 4;
+  double delta = 5;
+  uint64 timestamp = 6;
+}
