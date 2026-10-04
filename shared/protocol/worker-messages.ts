@@ -14,11 +14,22 @@ export interface StreamStats {
   lagMs: number;
 }
 
+export interface EditRequest {
+  requestId: string;
+  orderId: string;
+  field: EditableField;
+  value: number;
+}
+
+export type EditOutcome = { outcome: 'accepted' } | { outcome: 'rejected'; reason: string };
+
+export type EditResult = Omit<EditRequest, 'value'> & EditOutcome;
+
 // Main thread -> worker
 export type WorkerIn =
   | { type: 'CONNECT_STREAM'; url: string }
   | { type: 'RECONNECT_NOW' }
-  | { type: 'USER_MUTATION'; payload: { orderId: string; field: EditableField; value: number } };
+  | { type: 'USER_MUTATION'; payload: EditRequest };
 
 // Worker -> main thread
 export type WorkerOut =
@@ -27,4 +38,6 @@ export type WorkerOut =
   // Posted on state transitions only, never at tick rate
   | { type: 'STATUS'; status: ConnectionStatus }
   // Posted at 1 Hz while connected
-  | { type: 'STATS'; stats: StreamStats };
+  | { type: 'STATS'; stats: StreamStats }
+  // One per USER_MUTATION: server ack, server reject, timeout, or connection failure
+  | { type: 'EDIT_RESULT'; result: EditResult };

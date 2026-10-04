@@ -8,9 +8,9 @@ import {
   type GridOptions,
 } from 'ag-grid-community';
 import type { OrderRow } from '../../../shared/protocol/order-row.ts';
-import type { EditableField } from '../../../shared/protocol/worker-messages.ts';
 import { useConnectionStatus } from '../../stream/streamContext.ts';
 import { columnDefs, type BlotterContext } from './columnDefs.ts';
+import { useEditTracking } from './useEditTracking.ts';
 import { useGridSink } from './useGridSink.ts';
 import './OrderBlotter.css';
 
@@ -19,7 +19,8 @@ ModuleRegistry.registerModules([AllCommunityModule]);
 const gridTheme = themeAlpine.withPart(colorSchemeDark);
 
 export function OrderBlotter() {
-  const { onGridReady, mutate } = useGridSink();
+  const { onGridReady, gridApiRef } = useGridSink();
+  const { editContext, onCellEditingStopped } = useEditTracking(gridApiRef);
   const status = useConnectionStatus();
 
   // Read by the grid's `editable` callbacks without re-creating gridOptions
@@ -32,17 +33,14 @@ export function OrderBlotter() {
   const gridOptions = useMemo<GridOptions<OrderRow>>(
     () => ({
       getRowId: (params) => params.data.orderId,
-      context: { isLive: () => isLiveRef.current } satisfies BlotterContext,
+      context: { isLive: () => isLiveRef.current, ...editContext } satisfies BlotterContext,
       loading: true,
       rowBuffer: 25,
       asyncTransactionWaitMillis: 16,
       onGridReady,
-      onCellEditingStopped: (event) => {
-        if (!event.data || !event.valueChanged) return;
-        mutate(event.data.orderId, event.colDef.field as EditableField, Number(event.newValue));
-      },
+      onCellEditingStopped,
     }),
-    [onGridReady, mutate],
+    [onGridReady, editContext, onCellEditingStopped],
   );
 
   return (

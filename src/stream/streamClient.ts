@@ -1,6 +1,7 @@
 import type { OrderRow } from '../../shared/protocol/order-row.ts';
 import type {
   ConnectionStatus,
+  EditResult,
   EditableField,
   StreamStats,
   WorkerIn,
@@ -18,9 +19,11 @@ export interface StreamClient {
   connect(url: string): void;
   disconnect(): void;
   reconnectNow(): void;
-  mutate(orderId: string, field: EditableField, value: number): void;
+  // Returns the requestId; exactly one onEditResult event follows for it
+  mutate(orderId: string, field: EditableField, value: number): string;
   onSnapshot(listener: (rows: OrderRow[]) => void): () => void;
   onTicks(listener: (batch: TickBatch) => void): () => void;
+  onEditResult(listener: (result: EditResult) => void): () => void;
   getStatus(): ConnectionStatus;
   subscribeStatus(listener: () => void): () => void;
   getStats(): StreamStats | null;
@@ -50,6 +53,7 @@ export function createStreamClient(): StreamClient {
 
   const snapshotListeners = listenerSet<[OrderRow[]]>();
   const tickListeners = listenerSet<[TickBatch]>();
+  const editResultListeners = listenerSet<[EditResult]>();
   const statusListeners = listenerSet<[]>();
   const statsListeners = listenerSet<[]>();
 
@@ -72,6 +76,9 @@ export function createStreamClient(): StreamClient {
         stats = message.stats;
         statsListeners.emit();
         break;
+      case 'EDIT_RESULT':
+        editResultListeners.emit(message.result);
+        break;
     }
   }
 
@@ -92,10 +99,21 @@ export function createStreamClient(): StreamClient {
       statsListeners.emit();
     },
     reconnectNow: () => send({ type: 'RECONNECT_NOW' }),
-    mutate: (orderId, field, value) =>
-      send({ type: 'USER_MUTATION', payload: { orderId, field, value } }),
+    mutate(orderId, field, value) {
+      // Generated here so the UI can mark the cell pending without a worker round trip
+      const requestId = crypto.randomUUID();
+      if (worker) {
+        send({ type: 'USER_MUTATION', payload: { requestId, orderId, field, value } });
+      } else {
+        queueMicrotask(() =>
+          editResultListeners.emit({ requestId, orderId, field, outcome: 'rejected', reason: 'stream offline' }),
+        );
+      }
+      return requestId;
+    },
     onSnapshot: snapshotListeners.add,
     onTicks: tickListeners.add,
+    onEditResult: editResultListeners.add,
     getStatus: () => status,
     subscribeStatus: statusListeners.add,
     getStats: () => stats,

@@ -8,6 +8,8 @@ export const DEAD_AFTER_MS = 5_000;
 // A connection that never delivers its snapshot is useless even if heartbeats keep arriving
 export const SNAPSHOT_TIMEOUT_MS = 5_000;
 export const LIVENESS_CHECK_INTERVAL_MS = 500;
+// An edit with no ack by then is rolled back; shorter than DEAD_AFTER_MS so the two don't race
+export const ACK_TIMEOUT_MS = 3_000;
 
 // Exponential backoff with full jitter: random(0, min(cap, base * 2^attempt))
 export function backoffDelay(attempt: number, random: () => number = Math.random): number {

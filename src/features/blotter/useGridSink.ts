@@ -46,5 +46,5 @@ export function useGridSink() {
     }
   }, []);
 
-  return { onGridReady, mutate: client.mutate };
+  return { onGridReady, gridApiRef };
 }

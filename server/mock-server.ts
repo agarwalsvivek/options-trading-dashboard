@@ -16,6 +16,11 @@ const BATCH_INTERVAL_MS = 16;
 const HEARTBEAT_INTERVAL_MS = 1000;
 // Terminate clients that miss a ping/pong round (browsers answer pings automatically)
 const PING_INTERVAL_MS = 10_000;
+// Simulated edit processing time before the ack (override with MUTATION_LATENCY_MS=...)
+const MUTATION_LATENCY_MS = Number(process.env.MUTATION_LATENCY_MS ?? 300);
+// Edit validation limits
+const MAX_PRICE = 1000;
+const LOT_SIZE = 10;
 
 // Spin up a dedicated Mock WebSocket Gateway Server
 const wss = new WebSocketServer({ port: PORT });
@@ -30,6 +35,8 @@ const dirty = new Set<string>();
 let seq = 0;
 // Fault injection: when paused the server goes silent (no snapshot, deltas or heartbeats)
 let paused = false;
+// Fault injection: reject every edit with "risk check failed"
+let rejectAll = false;
 const alive = new WeakSet<WebSocket>();
 
 function broadcast(buffer: Uint8Array) {
@@ -105,22 +112,50 @@ setInterval(() => {
   }
 }, PING_INTERVAL_MS);
 
-function applyMutation(messageBuffer: RawData) {
-  const message = ClientMessage.decode(new Uint8Array(messageBuffer as Buffer));
-  if (message.body !== 'mutation' || !message.mutation) return;
+type Mutation = NonNullable<ClientMessage['mutation']>;
 
-  const mutation = message.mutation;
-  const record = mutation.orderId ? orderBook.get(mutation.orderId) : undefined;
-  if (!record) return;
+// The server is the only validator; the client just parses and sends.
+// Presence checks (not truthiness) so 0 is a valid edit.
+function validateMutation(mutation: Mutation, record: OrderRecord | undefined): string | null {
+  if (!record) return 'unknown order';
+  if (rejectAll) return 'risk check failed';
+  const { price, quantity } = mutation;
+  if (price != null && !(Number.isFinite(price) && price >= 0 && price <= MAX_PRICE)) {
+    return `price outside limits (0–${MAX_PRICE})`;
+  }
+  if (quantity != null && !(Number.isInteger(quantity) && quantity % LOT_SIZE === 0)) {
+    return `quantity must be a multiple of ${LOT_SIZE}`;
+  }
+  return null;
+}
 
-  // Presence checks (not truthiness) so 0 is a valid edit
-  if (mutation.price != null) record.price = mutation.price;
-  if (mutation.quantity != null) record.quantity = mutation.quantity;
-  record.timestamp = Date.now();
+function handleMutation(ws: WebSocket, mutation: Mutation) {
+  const requestId = mutation.requestId ?? '';
 
-  // Echo the authoritative value to every client in the next batch
-  dirty.add(record.orderId);
-  console.log(`✍️ User Edit Applied to Server Engine: ${mutation.orderId}`);
+  // Simulated processing latency so the client's pending state is visible
+  setTimeout(() => {
+    const record = mutation.orderId ? orderBook.get(mutation.orderId) : undefined;
+    const reason = validateMutation(mutation, record);
+
+    if (!reason && record) {
+      if (mutation.price != null) record.price = mutation.price;
+      if (mutation.quantity != null) record.quantity = mutation.quantity;
+      record.timestamp = Date.now();
+      // Every other client sees the change in the next batch
+      dirty.add(record.orderId);
+      console.log(`✍️ User Edit Applied to Server Engine: ${record.orderId}`);
+    } else {
+      console.log(`🚫 User Edit Rejected: ${mutation.orderId} (${reason})`);
+    }
+
+    // Paused means silent: the ack is lost, which exercises the client's ack timeout
+    if (paused || ws.readyState !== ws.OPEN) return;
+    ws.send(
+      ServerMessage.encode({
+        ack: { requestId, accepted: !reason, reason: reason ?? '', order: record },
+      }).finish(),
+    );
+  }, MUTATION_LATENCY_MS);
 }
 
 wss.on('connection', (ws) => {
@@ -136,7 +171,8 @@ wss.on('connection', (ws) => {
   // Handle incoming user modifications flowing back from the client-side ag-Grid edits
   ws.on('message', (messageBuffer: RawData) => {
     try {
-      applyMutation(messageBuffer);
+      const message = ClientMessage.decode(new Uint8Array(messageBuffer as Buffer));
+      if (message.body === 'mutation' && message.mutation) handleMutation(ws, message.mutation);
     } catch (err) {
       console.error('Failed to parse incoming client message buffer:', err);
     }
@@ -158,10 +194,16 @@ function handleKey(key: string) {
     paused = !paused;
     console.log(paused ? '⏸️  Paused: server is silent.' : '▶️  Resumed sending.');
   }
+  if (key === 'r') {
+    rejectAll = !rejectAll;
+    console.log(rejectAll ? '🚫 Rejecting all edits.' : '✅ Accepting valid edits.');
+  }
 }
 
 if (process.stdin.isTTY) {
-  console.log('⌨️  Keys: [d] drop all connections · [p] pause/resume sending · [Ctrl+C] quit');
+  console.log(
+    '⌨️  Keys: [d] drop all connections · [p] pause/resume sending · [r] reject all edits · [Ctrl+C] quit',
+  );
   process.stdin.setRawMode(true);
 }
 process.stdin.setEncoding('utf8');

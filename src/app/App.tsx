@@ -1,6 +1,7 @@
 import { OrderBlotter } from '../features/blotter/OrderBlotter.tsx';
 import { StreamProvider } from '../stream/StreamProvider.tsx';
 import { StatusBar } from '../ui/StatusBar.tsx';
+import { Toasts } from '../ui/Toasts.tsx';
 import './App.css';
 
 export default function App() {
@@ -13,6 +14,7 @@ export default function App() {
         </div>
         <StatusBar />
       </div>
+      <Toasts />
     </StreamProvider>
   );
 }

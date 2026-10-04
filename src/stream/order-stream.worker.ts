@@ -1,8 +1,16 @@
 // src/stream/order-stream.worker.ts
 import { ClientMessage, ServerMessage, type OptionOrder } from '../../shared/protocol/codec.ts';
 import type { OrderRow } from '../../shared/protocol/order-row.ts';
-import type { ConnectionStatus, WorkerIn, WorkerOut } from '../../shared/protocol/worker-messages.ts';
+import type {
+  ConnectionStatus,
+  EditOutcome,
+  EditRequest,
+  EditableField,
+  WorkerIn,
+  WorkerOut,
+} from '../../shared/protocol/worker-messages.ts';
 import {
+  ACK_TIMEOUT_MS,
   LIVENESS_CHECK_INTERVAL_MS,
   SNAPSHOT_TIMEOUT_MS,
   backoffDelay,
@@ -23,6 +31,16 @@ let lastSeq: number | null = null;
 let updateBatch: OrderRow[] = [];
 // Order ids the grid already has; anything else arriving in a delta is an add
 const knownIds = new Set<string>();
+// Last row the server sent for each order: what a rejected or failed edit rolls back to
+const serverRows = new Map<string, OrderRow>();
+
+interface InFlightEdit extends EditRequest {
+  sentAt: number;
+}
+// Edits awaiting an ack, by requestId
+const inFlight = new Map<string, InFlightEdit>();
+// Latest unacked edit per order and field; overlaid on outgoing rows so ticks can't revert it
+const pendingByOrder = new Map<string, Map<EditableField, InFlightEdit>>();
 
 let rowsThisSecond = 0;
 let lagMs = 0;
@@ -52,6 +70,80 @@ function toRow(order: OptionOrder.$Properties): OrderRow {
     quantity: order.quantity ?? 0,
     delta: order.delta ?? 0,
   };
+}
+
+// ---- Edits ----------------------------------------------------------------
+
+// Re-emit the server's row on the next flush (rollback on reject, confirmation on accept)
+function reemitServerRow(orderId: string) {
+  const row = serverRows.get(orderId);
+  if (row) updateBatch.push(row);
+}
+
+function postEditResult(edit: EditRequest, outcome: EditOutcome) {
+  const { requestId, orderId, field } = edit;
+  post({ type: 'EDIT_RESULT', result: { requestId, orderId, field, ...outcome } });
+}
+
+function settleEdit(requestId: string, outcome: EditOutcome) {
+  const edit = inFlight.get(requestId);
+  // Already settled, e.g. an ack arriving after its timeout
+  if (!edit) return;
+  inFlight.delete(requestId);
+
+  // Only clear the overlay if no newer edit to the same cell superseded this one
+  const cells = pendingByOrder.get(edit.orderId);
+  if (cells?.get(edit.field)?.requestId === requestId) {
+    cells.delete(edit.field);
+    if (cells.size === 0) pendingByOrder.delete(edit.orderId);
+  }
+
+  reemitServerRow(edit.orderId);
+  postEditResult(edit, outcome);
+}
+
+function failAllEdits(reason: string) {
+  for (const requestId of Array.from(inFlight.keys())) {
+    settleEdit(requestId, { outcome: 'rejected', reason });
+  }
+}
+
+// int64/double can't carry these; business rules are the server's job
+function unencodableReason(edit: EditRequest): string | null {
+  if (!Number.isFinite(edit.value)) return 'not a number';
+  if (edit.field === 'quantity' && !Number.isInteger(edit.value)) return 'quantity must be a whole number';
+  return null;
+}
+
+function sendEdit(edit: EditRequest) {
+  const reason =
+    status.state !== 'live' || socket?.readyState !== WebSocket.OPEN
+      ? 'stream offline'
+      : unencodableReason(edit);
+  if (reason || !socket) {
+    reemitServerRow(edit.orderId);
+    postEditResult(edit, { outcome: 'rejected', reason: reason ?? 'stream offline' });
+    return;
+  }
+
+  const pendingEdit = { ...edit, sentAt: Date.now() };
+  inFlight.set(edit.requestId, pendingEdit);
+  let cells = pendingByOrder.get(edit.orderId);
+  if (!cells) pendingByOrder.set(edit.orderId, (cells = new Map()));
+  cells.set(edit.field, pendingEdit);
+
+  // Only the edited field is set, so the server can tell it apart from unchanged ones
+  const binaryPayload = ClientMessage.encode({
+    mutation: {
+      orderId: edit.orderId,
+      [edit.field]: edit.value,
+      timestamp: pendingEdit.sentAt,
+      requestId: edit.requestId,
+    },
+  }).finish();
+  const transferablePayload = new ArrayBuffer(binaryPayload.byteLength);
+  new Uint8Array(transferablePayload).set(binaryPayload);
+  socket.send(transferablePayload);
 }
 
 // ---- Connection lifecycle -------------------------------------------------
@@ -102,6 +194,8 @@ function dropSocket(reason: string) {
 }
 
 function scheduleReconnect(reason: string) {
+  // Acks can't arrive on a dead socket; the next snapshot settles the values
+  failAllEdits('connection lost');
   const delay = backoffDelay(attempt);
   attempt++;
   setStatus({ state: 'reconnecting', attempt, retryAt: Date.now() + delay, reason });
@@ -111,6 +205,7 @@ function scheduleReconnect(reason: string) {
 function reconnectNow() {
   if (status.state === 'live') return;
   if (retryTimer) clearTimeout(retryTimer);
+  failAllEdits('connection lost');
   const ws = socket;
   socket = null;
   ws?.close();
@@ -124,7 +219,11 @@ function handleServerMessage(message: ServerMessage) {
     case 'snapshot': {
       const rows = (message.snapshot?.orders ?? []).map(toRow);
       knownIds.clear();
-      rows.forEach((row) => knownIds.add(row.orderId));
+      serverRows.clear();
+      rows.forEach((row) => {
+        knownIds.add(row.orderId);
+        serverRows.set(row.orderId, row);
+      });
       // Anything buffered predates the snapshot and is now stale
       updateBatch = [];
       lastSeq = message.snapshot?.seq ?? 0;
@@ -143,9 +242,28 @@ function handleServerMessage(message: ServerMessage) {
       lastSeq = seq;
       const orders = message.deltas?.orders ?? [];
       for (let i = 0; i < orders.length; i++) {
-        updateBatch.push(toRow(orders[i]));
+        const row = toRow(orders[i]);
+        serverRows.set(row.orderId, row);
+        updateBatch.push(row);
       }
       rowsThisSecond += orders.length;
+      break;
+    }
+    case 'ack': {
+      const ack = message.ack;
+      if (!ack) return;
+      // The ack's row is authoritative either way, even if the edit already timed out locally
+      if (ack.order) {
+        const row = toRow(ack.order);
+        serverRows.set(row.orderId, row);
+      }
+      settleEdit(
+        ack.requestId ?? '',
+        ack.accepted
+          ? { outcome: 'accepted' }
+          : { outcome: 'rejected', reason: ack.reason || 'rejected by server' },
+      );
+      if (ack.order?.orderId) reemitServerRow(ack.order.orderId);
       break;
     }
     case 'heartbeat': {
@@ -172,7 +290,14 @@ setInterval(() => {
 
     const add: OrderRow[] = [];
     const update: OrderRow[] = [];
-    for (const row of conflatedMap.values()) {
+    for (const serverRow of conflatedMap.values()) {
+      // Keep showing the user's unacked values; other fields keep ticking
+      const cells = pendingByOrder.get(serverRow.orderId);
+      let row = serverRow;
+      if (cells) {
+        row = { ...serverRow };
+        for (const [field, edit] of cells) row[field] = edit.value;
+      }
       if (knownIds.has(row.orderId)) {
         update.push(row);
       } else {
@@ -184,10 +309,17 @@ setInterval(() => {
   }
 }, FRAME_INTERVAL_MS);
 
-// Liveness loop: a half-open TCP connection may never fire onclose, so detect silence ourselves
+// Liveness loop: a half-open TCP connection may never fire onclose, so detect silence ourselves.
+// Also expires edits whose ack never came.
 setInterval(() => {
-  if (!socket) return;
   const now = Date.now();
+  for (const edit of Array.from(inFlight.values())) {
+    if (now - edit.sentAt >= ACK_TIMEOUT_MS) {
+      settleEdit(edit.requestId, { outcome: 'rejected', reason: 'timed out' });
+    }
+  }
+
+  if (!socket) return;
   const liveness = evaluateLiveness(now, lastMessageAt);
   if (lastSeq === null && now - connectStartedAt >= SNAPSHOT_TIMEOUT_MS) {
     dropSocket('no snapshot from server');
@@ -222,20 +354,8 @@ self.onmessage = function (event: MessageEvent<WorkerIn>) {
       reconnectNow();
       break;
 
-    case 'USER_MUTATION': {
-      const { orderId, field, value } = message.payload;
-      if (status.state !== 'live' || socket?.readyState !== WebSocket.OPEN) {
-        console.warn(`Edit to ${orderId} rejected: stream is ${status.state}`);
-        return;
-      }
-      // Only the edited field is set, so the server can tell it apart from unchanged ones
-      const binaryPayload = ClientMessage.encode({
-        mutation: { orderId, [field]: value, timestamp: Date.now() },
-      }).finish();
-      const transferablePayload = new ArrayBuffer(binaryPayload.byteLength);
-      new Uint8Array(transferablePayload).set(binaryPayload);
-      socket.send(transferablePayload);
+    case 'USER_MUTATION':
+      sendEdit(message.payload);
       break;
-    }
   }
 };

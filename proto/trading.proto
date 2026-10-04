@@ -34,6 +34,19 @@ message Mutation {
   optional double price = 2;
   optional int64 quantity = 3;
   uint64 timestamp = 4;
+  // Client-generated id echoed back in the MutationAck
+  string requestId = 5;
+}
+
+// Reply to one Mutation, sent only to the client that made it. Sent after the edit is
+// applied, so every batch that follows on the same socket already reflects it.
+message MutationAck {
+  string requestId = 1;
+  bool accepted = 2;
+  // Set when rejected
+  string reason = 3;
+  // Authoritative row after (or despite) the edit
+  OptionOrder order = 4;
 }
 
 message ServerMessage {
@@ -41,6 +54,7 @@ message ServerMessage {
     Snapshot snapshot = 1;
     DeltaBatch deltas = 2;
     Heartbeat heartbeat = 3;
+    MutationAck ack = 4;
   }
 }
 

@@ -9,3 +9,31 @@
   opacity: 0.55;
   filter: grayscale(0.6);
 }
+
+/* Edit sent, awaiting the server's ack */
+.blotter .ag-cell.cell-pending {
+  color: #f0b429;
+  font-style: italic;
+  background-color: rgb(229 165 10 / 12%);
+}
+
+/* Edit rejected: red highlight fades while the value rolls back */
+.blotter .ag-cell.cell-rejected {
+  animation: cell-rejected 1.5s ease-out;
+}
+
+@keyframes cell-rejected {
+  from {
+    background-color: rgb(229 72 77 / 55%);
+  }
+  to {
+    background-color: transparent;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .blotter .ag-cell.cell-rejected {
+    animation: none;
+    background-color: rgb(229 72 77 / 30%);
+  }
+}
