@@ -4,17 +4,22 @@
   "version": "0.0.0",
   "type": "module",
   "scripts": {
+    "proto": "pbjs -t static-module -w esm --force-number -o shared/protocol/generated/trading.js proto/trading.proto && pbts -o shared/protocol/generated/trading.d.ts shared/protocol/generated/trading.js",
+    "predev": "npm run proto",
     "dev": "vite",
+    "prebuild": "npm run proto",
     "build": "tsc -b && vite build",
     "lint": "eslint .",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "preserver": "npm run proto",
+    "server": "node server/mock-server.ts"
   },
   "dependencies": {
+    "ag-grid-community": "^36.2.0",
     "ag-grid-react": "^36.2.0",
     "protobufjs": "^8.8.0",
     "react": "^19.2.8",
-    "react-dom": "^19.2.8",
-    "ws": "^8.22.0"
+    "react-dom": "^19.2.8"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
@@ -27,8 +32,10 @@
     "eslint-plugin-react-hooks": "^7.1.1",
     "eslint-plugin-react-refresh": "^0.5.6",
     "globals": "^17.12.0",
+    "protobufjs-cli": "^2.7.0",
     "typescript": "~6.0.2",
     "typescript-eslint": "^8.69.0",
-    "vite": "^8.3.0"
+    "vite": "^8.3.0",
+    "ws": "^8.22.0"
   }
 }

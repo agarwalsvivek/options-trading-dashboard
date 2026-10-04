@@ -22,3 +22,6 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# Generated protobuf code (npm run proto)
+shared/protocol/generated/
