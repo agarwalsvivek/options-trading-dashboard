@@ -23,6 +23,10 @@ const OptionOrder = root.lookupType('OptionOrder');
 let socket: WebSocket | null = null;
 let updateBatch: any[] = [];
 
+// One frame at 60 Hz: 1000 ms / 60 frames per second ≈ 16.67 ms per frame
+const TARGET_FPS = 60;
+const FRAME_INTERVAL_MS = 1000 / TARGET_FPS;
+
 // 60Hz UI Synchronization Framework Flush Loop
 setInterval(() => {
   if (updateBatch.length > 0) {
@@ -33,7 +37,7 @@ setInterval(() => {
     self.postMessage({ type: 'TICK_BATCH', data: Array.from(conflatedMap.values()) });
     updateBatch = [];
   }
-}, 16.67);
+}, FRAME_INTERVAL_MS);
 
 self.onmessage = function (event) {
   const { type, payload } = event.data;
