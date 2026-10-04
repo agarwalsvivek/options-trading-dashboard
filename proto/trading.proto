@@ -8,3 +8,36 @@ message OptionOrder {
   double delta = 5;
   uint64 timestamp = 6;
 }
+
+// Full order book, sent once per connection before any deltas.
+message Snapshot {
+  uint64 seq = 1;
+  repeated OptionOrder orders = 2;
+}
+
+// Conflated full rows changed since the previous batch.
+message DeltaBatch {
+  uint64 seq = 1;
+  repeated OptionOrder orders = 2;
+}
+
+// User edit; only the edited field is set (presence-tracked, so 0 is a real value).
+message Mutation {
+  string orderId = 1;
+  optional double price = 2;
+  optional int64 quantity = 3;
+  uint64 timestamp = 4;
+}
+
+message ServerMessage {
+  oneof body {
+    Snapshot snapshot = 1;
+    DeltaBatch deltas = 2;
+  }
+}
+
+message ClientMessage {
+  oneof body {
+    Mutation mutation = 1;
+  }
+}
