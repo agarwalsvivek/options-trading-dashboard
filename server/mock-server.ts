@@ -2,6 +2,7 @@
 import { WebSocketServer, type RawData, type WebSocket } from 'ws';
 import { ClientMessage, ServerMessage } from '../shared/protocol/codec.ts';
 import type { OrderRow } from '../shared/protocol/order-row.ts';
+import { validateMutation, type Mutation } from './validation.ts';
 
 interface OrderRecord extends OrderRow {
   timestamp: number;
@@ -18,9 +19,6 @@ const HEARTBEAT_INTERVAL_MS = 1000;
 const PING_INTERVAL_MS = 10_000;
 // Simulated edit processing time before the ack (override with MUTATION_LATENCY_MS=...)
 const MUTATION_LATENCY_MS = Number(process.env.MUTATION_LATENCY_MS ?? 300);
-// Edit validation limits
-const MAX_PRICE = 1000;
-const LOT_SIZE = 10;
 
 // Spin up a dedicated Mock WebSocket Gateway Server
 const wss = new WebSocketServer({ port: PORT });
@@ -112,30 +110,13 @@ setInterval(() => {
   }
 }, PING_INTERVAL_MS);
 
-type Mutation = NonNullable<ClientMessage['mutation']>;
-
-// The server is the only validator; the client just parses and sends.
-// Presence checks (not truthiness) so 0 is a valid edit.
-function validateMutation(mutation: Mutation, record: OrderRecord | undefined): string | null {
-  if (!record) return 'unknown order';
-  if (rejectAll) return 'risk check failed';
-  const { price, quantity } = mutation;
-  if (price != null && !(Number.isFinite(price) && price >= 0 && price <= MAX_PRICE)) {
-    return `price outside limits (0–${MAX_PRICE})`;
-  }
-  if (quantity != null && !(Number.isInteger(quantity) && quantity % LOT_SIZE === 0)) {
-    return `quantity must be a multiple of ${LOT_SIZE}`;
-  }
-  return null;
-}
-
 function handleMutation(ws: WebSocket, mutation: Mutation) {
   const requestId = mutation.requestId ?? '';
 
   // Simulated processing latency so the client's pending state is visible
   setTimeout(() => {
     const record = mutation.orderId ? orderBook.get(mutation.orderId) : undefined;
-    const reason = validateMutation(mutation, record);
+    const reason = validateMutation(mutation, record !== undefined, { rejectAll });
 
     if (!reason && record) {
       if (mutation.price != null) record.price = mutation.price;

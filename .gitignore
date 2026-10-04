@@ -25,3 +25,6 @@ dist-ssr
 
 # Generated protobuf code (npm run proto)
 shared/protocol/generated/
+
+# Test coverage reports
+coverage/
