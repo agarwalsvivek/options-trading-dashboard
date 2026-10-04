@@ -21,6 +21,13 @@ message DeltaBatch {
   repeated OptionOrder orders = 2;
 }
 
+// Liveness signal, sent every second regardless of market activity.
+// `seq` is the latest batch seq, so clients can detect a missed batch.
+message Heartbeat {
+  uint64 seq = 1;
+  uint64 serverTime = 2;
+}
+
 // User edit; only the edited field is set (presence-tracked, so 0 is a real value).
 message Mutation {
   string orderId = 1;
@@ -33,6 +40,7 @@ message ServerMessage {
   oneof body {
     Snapshot snapshot = 1;
     DeltaBatch deltas = 2;
+    Heartbeat heartbeat = 3;
   }
 }
 

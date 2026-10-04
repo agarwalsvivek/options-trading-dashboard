@@ -1,4 +1,7 @@
 .app {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
   height: 100%;
   width: 100%;
   padding: 20px;
@@ -8,11 +11,12 @@
 
 .app-title {
   color: #fff;
-  margin: 0 0 15px 0;
+  margin: 0 0 7px 0;
   font-family: sans-serif;
 }
 
 .app-blotter {
-  height: calc(100% - 50px);
+  flex: 1;
+  min-height: 0;
   width: 100%;
 }

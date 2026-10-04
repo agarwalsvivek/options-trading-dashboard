@@ -1,5 +1,11 @@
 import type { OrderRow } from '../../shared/protocol/order-row.ts';
-import type { EditableField, WorkerIn, WorkerOut } from '../../shared/protocol/worker-messages.ts';
+import type {
+  ConnectionStatus,
+  EditableField,
+  StreamStats,
+  WorkerIn,
+  WorkerOut,
+} from '../../shared/protocol/worker-messages.ts';
 
 export interface TickBatch {
   add: OrderRow[];
@@ -7,52 +13,92 @@ export interface TickBatch {
 }
 
 // Typed main-thread facade over the order stream worker. This is the only module that touches `Worker`.
+// Status and stats are exposed in the subscribe/getSnapshot shape `useSyncExternalStore` expects.
 export interface StreamClient {
-  connect(): void;
+  connect(url: string): void;
+  disconnect(): void;
+  reconnectNow(): void;
   mutate(orderId: string, field: EditableField, value: number): void;
   onSnapshot(listener: (rows: OrderRow[]) => void): () => void;
   onTicks(listener: (batch: TickBatch) => void): () => void;
-  dispose(): void;
+  getStatus(): ConnectionStatus;
+  subscribeStatus(listener: () => void): () => void;
+  getStats(): StreamStats | null;
+  subscribeStats(listener: () => void): () => void;
+}
+
+const INITIAL_STATUS: ConnectionStatus = { state: 'connecting', attempt: 0 };
+
+function listenerSet<T extends unknown[]>() {
+  const listeners = new Set<(...args: T) => void>();
+  return {
+    add(listener: (...args: T) => void) {
+      listeners.add(listener);
+      return () => {
+        listeners.delete(listener);
+      };
+    },
+    emit: (...args: T) => listeners.forEach((listener) => listener(...args)),
+  };
 }
 
 export function createStreamClient(): StreamClient {
-  // Vite worker loading instantiation syntax
-  const worker = new Worker(new URL('./order-stream.worker.ts', import.meta.url), {
-    type: 'module',
-  });
-  const snapshotListeners = new Set<(rows: OrderRow[]) => void>();
-  const tickListeners = new Set<(batch: TickBatch) => void>();
+  // Created lazily in connect() so constructing a client (e.g. in a StrictMode double render) is free
+  let worker: Worker | null = null;
+  let status = INITIAL_STATUS;
+  let stats: StreamStats | null = null;
 
-  const send = (message: WorkerIn) => worker.postMessage(message);
+  const snapshotListeners = listenerSet<[OrderRow[]]>();
+  const tickListeners = listenerSet<[TickBatch]>();
+  const statusListeners = listenerSet<[]>();
+  const statsListeners = listenerSet<[]>();
 
-  worker.onmessage = (event: MessageEvent<WorkerOut>) => {
+  const send = (message: WorkerIn) => worker?.postMessage(message);
+
+  function handleMessage(event: MessageEvent<WorkerOut>) {
     const message = event.data;
     switch (message.type) {
       case 'SNAPSHOT':
-        snapshotListeners.forEach((listener) => listener(message.rows));
+        snapshotListeners.emit(message.rows);
         break;
       case 'TICK_BATCH':
-        tickListeners.forEach((listener) => listener({ add: message.add, update: message.update }));
+        tickListeners.emit({ add: message.add, update: message.update });
+        break;
+      case 'STATUS':
+        status = message.status;
+        statusListeners.emit();
+        break;
+      case 'STATS':
+        stats = message.stats;
+        statsListeners.emit();
         break;
     }
-  };
+  }
 
   return {
-    connect: () => send({ type: 'CONNECT_STREAM' }),
+    connect(url) {
+      if (worker) return;
+      // Vite worker loading instantiation syntax
+      worker = new Worker(new URL('./order-stream.worker.ts', import.meta.url), { type: 'module' });
+      worker.onmessage = handleMessage;
+      send({ type: 'CONNECT_STREAM', url });
+    },
+    disconnect() {
+      worker?.terminate();
+      worker = null;
+      status = INITIAL_STATUS;
+      stats = null;
+      statusListeners.emit();
+      statsListeners.emit();
+    },
+    reconnectNow: () => send({ type: 'RECONNECT_NOW' }),
     mutate: (orderId, field, value) =>
       send({ type: 'USER_MUTATION', payload: { orderId, field, value } }),
-    onSnapshot(listener) {
-      snapshotListeners.add(listener);
-      return () => snapshotListeners.delete(listener);
-    },
-    onTicks(listener) {
-      tickListeners.add(listener);
-      return () => tickListeners.delete(listener);
-    },
-    dispose() {
-      snapshotListeners.clear();
-      tickListeners.clear();
-      worker.terminate();
-    },
+    onSnapshot: snapshotListeners.add,
+    onTicks: tickListeners.add,
+    getStatus: () => status,
+    subscribeStatus: statusListeners.add,
+    getStats: () => stats,
+    subscribeStats: statsListeners.add,
   };
 }

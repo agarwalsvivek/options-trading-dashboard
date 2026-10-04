@@ -1,0 +1,11 @@
+.blotter {
+  height: 100%;
+  width: 100%;
+  transition: opacity 0.3s, filter 0.3s;
+}
+
+/* Stale, reconnecting or not yet connected: the numbers on screen may be out of date */
+.blotter:not([data-state='live']) {
+  opacity: 0.55;
+  filter: grayscale(0.6);
+}
