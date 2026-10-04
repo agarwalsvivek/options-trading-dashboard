@@ -1,12 +1,17 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { useEffect, useRef, useMemo } from 'react';
 import { AgGridReact } from 'ag-grid-react';
-import { ClientSideRowModelModule, ModuleRegistry, type ColDef } from 'ag-grid-community';
+import {
+  AllCommunityModule,
+  ModuleRegistry,
+  colorSchemeDark,
+  themeAlpine,
+  type ColDef,
+} from 'ag-grid-community';
 
-import 'ag-grid-community/styles/ag-grid.css';
-import 'ag-grid-community/styles/ag-theme-alpine.css';
+ModuleRegistry.registerModules([AllCommunityModule]);
 
-ModuleRegistry.registerModules([ClientSideRowModelModule]);
+const gridTheme = themeAlpine.withPart(colorSchemeDark);
 
 export default function App() {
   const gridApiRef = useRef<any>(null);
@@ -88,10 +93,9 @@ export default function App() {
 
   return (
     <div
-      className="ag-theme-alpine-dark"
       style={{
-        height: '100vh',
-        width: '100vw',
+        height: '100%',
+        width: '100%',
         padding: '20px',
         boxSizing: 'border-box',
         background: '#1c1f24',
@@ -101,7 +105,7 @@ export default function App() {
         Real-Time Options Flow (1,000 ops Data Engine Sim)
       </h2>
       <div style={{ height: 'calc(100% - 50px)', width: '100%' }}>
-        <AgGridReact columnDefs={columnDefs} gridOptions={gridOptions} />
+        <AgGridReact theme={gridTheme} columnDefs={columnDefs} gridOptions={gridOptions} />
       </div>
     </div>
   );
