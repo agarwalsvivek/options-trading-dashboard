@@ -1,22 +1,141 @@
 .app {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
+  display: grid;
+  grid-template:
+    'header  header' auto
+    'blotter sidebar' minmax(0, 1fr)
+    'status  status' auto
+    / minmax(0, 1fr) 340px;
+  gap: 12px;
   height: 100%;
-  width: 100%;
-  padding: 20px;
+  padding: 12px 16px;
   box-sizing: border-box;
-  background: #1c1f24;
+  background: var(--bg);
+}
+
+.app-header {
+  grid-area: header;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  min-width: 0;
 }
 
 .app-title {
-  color: #fff;
-  margin: 0 0 7px 0;
-  font-family: sans-serif;
+  margin: 0;
+  color: var(--text-strong);
+  font-size: 18px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.app-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-left: auto;
 }
 
 .app-blotter {
-  flex: 1;
+  grid-area: blotter;
   min-height: 0;
-  width: 100%;
+  min-width: 0;
+}
+
+.app-sidebar {
+  grid-area: sidebar;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-height: 0;
+  overflow: auto;
+}
+
+.app-status {
+  grid-area: status;
+  min-width: 0;
+}
+
+/* Narrow screens: sidebar stacks under the blotter and the page scrolls */
+@media (max-width: 1000px) {
+  .app {
+    grid-template:
+      'header' auto
+      'blotter' minmax(420px, 70svh)
+      'sidebar' auto
+      'status' auto
+      / minmax(0, 1fr);
+    height: auto;
+    min-height: 100%;
+  }
+
+  #root:has(.app) {
+    height: auto;
+    min-height: 100svh;
+    overflow: visible;
+  }
+
+  .app-sidebar {
+    overflow: visible;
+  }
+}
+
+/* ---- Shared UI primitives ---- */
+
+.panel {
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface);
+  min-height: 0;
+}
+
+.panel-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--border);
+}
+
+.panel-title {
+  margin: 0;
+  color: var(--text-strong);
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+}
+
+.panel-body {
+  padding: 12px;
+  min-height: 0;
+}
+
+.panel-empty {
+  margin: 0;
+  color: var(--text-muted);
+}
+
+.button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 10px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--surface-raised);
+  color: var(--text-strong);
+  font: inherit;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.button:hover:not(:disabled) {
+  border-color: var(--text-muted);
+}
+
+.button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
 }

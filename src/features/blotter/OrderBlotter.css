@@ -4,6 +4,10 @@
   transition: opacity 0.3s, filter 0.3s;
 }
 
+.blotter .ag-cell {
+  font-variant-numeric: tabular-nums;
+}
+
 /* Stale, reconnecting or not yet connected: the numbers on screen may be out of date */
 .blotter:not([data-state='live']) {
   opacity: 0.55;
@@ -12,9 +16,9 @@
 
 /* Edit sent, awaiting the server's ack */
 .blotter .ag-cell.cell-pending {
-  color: #f0b429;
+  color: var(--warning);
   font-style: italic;
-  background-color: rgb(229 165 10 / 12%);
+  background-color: color-mix(in srgb, var(--warning) 14%, transparent);
 }
 
 /* Edit rejected: red highlight fades while the value rolls back */
@@ -24,7 +28,7 @@
 
 @keyframes cell-rejected {
   from {
-    background-color: rgb(229 72 77 / 55%);
+    background-color: color-mix(in srgb, var(--negative) 50%, transparent);
   }
   to {
     background-color: transparent;
@@ -34,6 +38,6 @@
 @media (prefers-reduced-motion: reduce) {
   .blotter .ag-cell.cell-rejected {
     animation: none;
-    background-color: rgb(229 72 77 / 30%);
+    background-color: color-mix(in srgb, var(--negative) 25%, transparent);
   }
 }

@@ -4,7 +4,20 @@
     <meta charset="UTF-8" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>options-trading-dashboard</title>
+    <title>Options Flow</title>
+    <script>
+      // Resolve the theme before first paint to avoid a flash; src/state/theme.ts keeps it in sync after
+      (function () {
+        var pref = 'system';
+        try {
+          pref = localStorage.getItem('otd.theme') || 'system';
+        } catch (e) {}
+        var dark = pref === 'dark' || (pref === 'system' && matchMedia('(prefers-color-scheme: dark)').matches);
+        var mode = dark ? 'dark' : 'light';
+        document.documentElement.dataset.theme = mode;
+        document.documentElement.dataset.agThemeMode = mode;
+      })();
+    </script>
   </head>
   <body>
     <div id="root"></div>

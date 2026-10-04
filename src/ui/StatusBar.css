@@ -1,23 +1,24 @@
 .status-bar {
-  --status-color: #e5a50a;
+  --status-color: var(--warning);
   display: flex;
   align-items: center;
   gap: 10px;
   height: 28px;
   padding: 0 4px;
-  color: #c9ced6;
-  font: 13px/1 sans-serif;
+  color: var(--text);
+  font-size: 13px;
+  line-height: 1;
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
   overflow: hidden;
 }
 
 .status-bar[data-state='live'] {
-  --status-color: #2ec27e;
+  --status-color: var(--positive);
 }
 
 .status-bar[data-state='reconnecting'] {
-  --status-color: #e5484d;
+  --status-color: var(--negative);
 }
 
 .status-dot {
@@ -30,31 +31,15 @@
 }
 
 .status-text {
-  color: #fff;
+  color: var(--text-strong);
   overflow: hidden;
   text-overflow: ellipsis;
 }
 
 .status-stats {
-  color: #8b929c;
+  color: var(--text-muted);
 }
 
 .status-retry {
   margin-left: auto;
-  padding: 3px 10px;
-  border: 1px solid #4a505a;
-  border-radius: 4px;
-  background: #2a2e35;
-  color: #fff;
-  font: inherit;
-  cursor: pointer;
-}
-
-.status-retry:hover {
-  background: #353a42;
-}
-
-.status-retry:focus-visible {
-  outline: 2px solid #5b9cf6;
-  outline-offset: 2px;
 }

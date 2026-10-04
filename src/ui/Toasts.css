@@ -16,13 +16,13 @@
   align-items: center;
   gap: 12px;
   padding: 10px 12px;
-  border: 1px solid #5c2b2e;
-  border-left: 3px solid #e5484d;
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--negative);
   border-radius: 6px;
-  background: #2a1f21;
-  color: #f3d6d7;
-  font: 13px/1.4 sans-serif;
-  box-shadow: 0 4px 16px rgb(0 0 0 / 40%);
+  background: var(--surface-raised);
+  color: var(--text-strong);
+  font-size: 13px;
+  box-shadow: var(--shadow);
   pointer-events: auto;
   animation: toast-in 0.15s ease-out;
 }
@@ -32,15 +32,14 @@
   padding: 0 4px;
   border: 0;
   background: none;
-  color: inherit;
+  color: var(--text-muted);
   font-size: 18px;
   line-height: 1;
   cursor: pointer;
 }
 
-.toast-dismiss:focus-visible {
-  outline: 2px solid #5b9cf6;
-  outline-offset: 2px;
+.toast-dismiss:hover {
+  color: var(--text-strong);
 }
 
 @keyframes toast-in {

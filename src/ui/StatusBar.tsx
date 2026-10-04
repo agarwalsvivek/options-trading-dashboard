@@ -62,7 +62,7 @@ export function StatusBar() {
         </span>
       )}
       {status.state === 'reconnecting' && (
-        <button type="button" className="status-retry" onClick={client.reconnectNow}>
+        <button type="button" className="button status-retry" onClick={client.reconnectNow}>
           Retry now
         </button>
       )}

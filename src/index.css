@@ -1,53 +1,78 @@
-:root {
-  --text: #6b6375;
-  --text-h: #08060d;
-  --bg: #fff;
-  --border: #e5e4e7;
-  --code-bg: #f4f3ec;
-  --accent: #aa3bff;
-  --accent-bg: rgba(170, 59, 255, 0.1);
-  --accent-border: rgba(170, 59, 255, 0.5);
-  --social-bg: rgba(244, 243, 236, 0.5);
-  --shadow:
-    rgba(0, 0, 0, 0.1) 0 10px 15px -3px, rgba(0, 0, 0, 0.05) 0 4px 6px -2px;
+/* Design tokens. Light is the default; dark applies via data-theme (set before first paint in
+   index.html) or, if scripts never ran, via the OS preference. AG Grid reads these too. */
+:root,
+:root[data-theme='light'] {
+  --bg: #eef0f3;
+  --surface: #ffffff;
+  --surface-raised: #f6f7f9;
+  --border: #dde1e6;
+  --text: #2b2f36;
+  --text-strong: #0d0f12;
+  --text-muted: #687080;
+  --accent: #2563eb;
+  --positive: #127a49;
+  --negative: #c9262c;
+  --warning: #a86b00;
+  --focus: #2563eb;
+  --shadow: 0 4px 16px rgb(15 20 30 / 12%);
 
   --sans: system-ui, 'Segoe UI', Roboto, sans-serif;
-  --heading: system-ui, 'Segoe UI', Roboto, sans-serif;
   --mono: ui-monospace, Consolas, monospace;
 
-  font: 18px/145% var(--sans);
-  letter-spacing: 0.18px;
-  color-scheme: light dark;
+  color-scheme: light;
+}
+
+:root[data-theme='dark'] {
+  --bg: #16181d;
+  --surface: #1c1f24;
+  --surface-raised: #23272e;
+  --border: #2f343c;
+  --text: #c9ced6;
+  --text-strong: #ffffff;
+  --text-muted: #8b929c;
+  --accent: #5b9cf6;
+  --positive: #2ec27e;
+  --negative: #f2555a;
+  --warning: #e5a50a;
+  --focus: #5b9cf6;
+  --shadow: 0 4px 16px rgb(0 0 0 / 40%);
+
+  color-scheme: dark;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme]) {
+    --bg: #16181d;
+    --surface: #1c1f24;
+    --surface-raised: #23272e;
+    --border: #2f343c;
+    --text: #c9ced6;
+    --text-strong: #ffffff;
+    --text-muted: #8b929c;
+    --accent: #5b9cf6;
+    --positive: #2ec27e;
+    --negative: #f2555a;
+    --warning: #e5a50a;
+    --focus: #5b9cf6;
+    --shadow: 0 4px 16px rgb(0 0 0 / 40%);
+
+    color-scheme: dark;
+  }
+}
+
+:root {
+  font: 14px/1.4 var(--sans);
   color: var(--text);
   background: var(--bg);
   font-synthesis: none;
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
-
-  @media (max-width: 1024px) {
-    font-size: 16px;
-  }
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --text: #9ca3af;
-    --text-h: #f3f4f6;
-    --bg: #16171d;
-    --border: #2e303a;
-    --code-bg: #1f2028;
-    --accent: #c084fc;
-    --accent-bg: rgba(192, 132, 252, 0.15);
-    --accent-border: rgba(192, 132, 252, 0.5);
-    --social-bg: rgba(47, 48, 58, 0.5);
-    --shadow:
-      rgba(0, 0, 0, 0.4) 0 10px 15px -3px, rgba(0, 0, 0, 0.25) 0 4px 6px -2px;
-  }
-
-  #social .button-icon {
-    filter: invert(1) brightness(2);
-  }
+body {
+  margin: 0;
+  background: var(--bg);
 }
 
 #root {
@@ -56,50 +81,7 @@
   overflow: hidden;
 }
 
-body {
-  margin: 0;
-}
-
-h1,
-h2 {
-  font-family: var(--heading);
-  font-weight: 500;
-  color: var(--text-h);
-}
-
-h1 {
-  font-size: 56px;
-  letter-spacing: -1.68px;
-  margin: 32px 0;
-  @media (max-width: 1024px) {
-    font-size: 36px;
-    margin: 20px 0;
-  }
-}
-h2 {
-  font-size: 24px;
-  line-height: 118%;
-  letter-spacing: -0.24px;
-  margin: 0 0 8px;
-  @media (max-width: 1024px) {
-    font-size: 20px;
-  }
-}
-p {
-  margin: 0;
-}
-
-code,
-.counter {
-  font-family: var(--mono);
-  display: inline-flex;
-  border-radius: 4px;
-  color: var(--text-h);
-}
-
-code {
-  font-size: 15px;
-  line-height: 135%;
-  padding: 4px 8px;
-  background: var(--code-bg);
+:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
 }

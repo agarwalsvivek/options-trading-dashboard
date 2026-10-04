@@ -31,24 +31,44 @@ function editStateClasses(field: EditableField) {
   };
 }
 
+// Standard equity option: one contract covers 100 shares
+export const CONTRACT_MULTIPLIER = 100;
+
+// Right-aligned, flashes when a tick changes the value
+const numeric: ColDef<OrderRow> = {
+  cellDataType: 'number',
+  type: 'rightAligned',
+  enableCellChangeFlash: true,
+};
+
 export const columnDefs: ColDef<OrderRow>[] = [
-  { field: 'orderId', pinned: 'left', width: 120 },
-  { field: 'underlying', filter: true, width: 120 },
+  { field: 'orderId', pinned: 'left', flex: 0, width: 120 },
+  { field: 'underlying', filter: true, flex: 0, width: 130 },
   {
+    ...numeric,
     field: 'price',
-    cellDataType: 'number',
     editable: editableWhenLive,
     valueFormatter: (p: NumberFormatterParams) => p.value?.toFixed(2) ?? '0.00',
     cellClassRules: editStateClasses('price'),
   },
   {
+    ...numeric,
     field: 'quantity',
-    cellDataType: 'number',
     editable: editableWhenLive,
     valueFormatter: (p: NumberFormatterParams) => p.value?.toLocaleString() ?? '0',
     cellClassRules: editStateClasses('quantity'),
   },
   {
+    ...numeric,
+    colId: 'notional',
+    headerName: 'Notional',
+    valueGetter: (p) => (p.data ? p.data.price * p.data.quantity * CONTRACT_MULTIPLIER : null),
+    valueFormatter: (p: NumberFormatterParams) =>
+      p.value?.toLocaleString(undefined, { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }) ??
+      '',
+  },
+  {
+    ...numeric,
     field: 'delta',
     valueFormatter: (p: NumberFormatterParams) => p.value?.toFixed(3) ?? '0.000',
   },
